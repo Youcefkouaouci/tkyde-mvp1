@@ -35,7 +35,6 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Columns\ToggleColumn;
 
 class MessageRulesTable extends Component implements HasForms, HasTable
 {
@@ -45,74 +44,91 @@ class MessageRulesTable extends Component implements HasForms, HasTable
     public $properties;
     public $selectedTemplate = null;
     public $isSmsSelected = false;
+
     protected $listeners = ['show-properties-modal' => 'showPropertiesModal'];
-   
+
     public function showPropertiesModal($properties)
     {
         $this->properties = $properties;
         $this->dispatch('openModal', ['properties' => $properties]);
     }
 
-      public function table(Table $table): Table
+    public function table(Table $table): Table
     {
         return $table
             ->query(
                 Rule::query()
-                    // ->where('created_by', auth()->id())
-                    ->with(['properties.photos', 'properties.attribute', 'platforms', 'channels', 'ruleMessage'])
+                    ->with(['properties.photos', 'properties.attribute', 'platforms'])
             )
-            ->columns([ 
-                ToggleColumn::make('enabled')
-                ->label('Status')
-                ->onColor('quaternary')
-                ->offColor('grey')
-                ->width('2rem')
-                ->alignment('centre')
-                ->beforeStateUpdated(function ($record, $state) {
-                    return $state;
-                }),
-
+            ->columns([
                 TextColumn::make('name')
-                    ->label('Message Name')
+                    ->label('Rule Name')
                     ->sortable()
-                    ->searchable()
-                    ->weight('medium')
-                    ->size('sm')
-                    ->width('15rem'),
+                    ->searchable(),
 
-                TextColumn::make('trigger_display')
-                    ->label('Trigger')
-                    ->sortable(['sending_minutes', 'sending_event'])
-                    ->getStateUsing(function ($record) {
-                        $minutes = $record->sending_minutes ?? 1;
-                        $event = $record->sending_event;
-                        
-                        return match($event) {
-                            'booking_created' => "{$minutes} minute after booking",
-                            'booking_updated' => "{$minutes} minute after booking",
-                            'check_in' => "{$minutes} days before check-in",
-                            'check_out' => "{$minutes} days before check-out",
-                            default => "{$minutes} minute after {$event}"
-                        };
-                    })
-                    ->size('sm')
-                    ->width('10rem'),
+                TextColumn::make('sending_event')
+                    ->label('Event')
+                    ->sortable()
+                    ->searchable(),
+
+                // TextColumn::make('sending_minutes')
+                //     ->label('Minutes Before/After')
+                //     ->sortable()
+                //     ->searchable(),
+
+                // TextColumn::make('sending_time')
+                //     ->label('Sending Time')
+                //     ->sortable()
+                //     ->searchable()
+                //     ->dateTime('F j, Y, g:i a')
+                //     ->placeholder('N/A'),
+
+                IconColumn::make('enabled')
+                    ->boolean(),
 
                 ImageColumn::make('platforms.icon')
-                    ->label('Platform')
+                    ->label('Platforms')
+                    ->searchable()
                     ->circular()
                     ->stacked()
-                    ->ring(0)
-                    ->limit(3)
-                    ->size('xs')
-                    ->height(25)
-                    ->width(25)
-                    ->defaultImageUrl('/images/platforms/default.png')
-                    ->alignment('center'),
+                    ->ring(3)
+                    ->limit(2),
+                TextColumn::make('properties')
+                    ->label('Properties')
+                    ->getStateUsing(
+                        fn(Rule $record) =>
+                        $record->properties->pluck('attribute.name')->join(', ')
+                    ),
+
+                // ImageColumn::make('property_images')
+                //     ->label('Properties')
+                //     ->getStateUsing(function ($record) {
+                //         return $record->properties->map(function ($property) {
+                //             return $property->photos->first()?->url ?? 'properties/property-default-image.jpg';
+                //         })->filter()->toArray();
+                //     })
+                //     ->circular()
+                //     ->limit(2)
+                //     ->limitedRemainingText()
+                //     ->action(
+                //         Action::make('viewProperties')
+                //             ->label('show more')
+                //             ->modalHeading('Properties')
+                //             ->modalContent(function (Rule $record) {
+                //                 $properties = $record->properties->load('attribute')->map(function ($property) {
+                //                     return [
+                //                         'name' => $property->attribute->name ?? 'N/A',
+                //                         'photo' => $property->photos->first()?->url ?? 'properties/property-default-image.jpg'
+                //                     ];
+                //                 });
+
+                //                 return view('livewire.automation.properties-modal', ['properties' => $properties]);
+                //             })
+                //             ->modalWidth('lg')
+                //             ->modalSubmitAction(false)
+                //             ->modalCancelAction(false)
+                //     )
             ])
-            ->defaultSort('created_at', 'desc')
-            ->striped()
-            ->paginated([10, 25, 50])
             ->filters([
                 SelectFilter::make('enabled')
                     ->label('Status')
@@ -130,11 +146,7 @@ class MessageRulesTable extends Component implements HasForms, HasTable
             ->actions([
                 EditAction::make()
                     ->button()
-                    ->size('sm')
-                    ->color('primary')
-                    ->icon('heroicon-m-pencil-square')
                     ->slideOver()
-                    ->modalWidth('2xl')
                     ->form([
                         TextInput::make('name')
                             ->label('Rule Name')
@@ -284,6 +296,7 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                             ])
                             ->collapsible(),
                     ])
+
                     ->action(function ($data, $record) {
                         $record->update([
                             'name' => $data['name'],
@@ -311,33 +324,215 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                     }),
                 DeleteAction::make()
                     ->button()
-                    ->size('sm')
-                    ->color('danger')
-                    ->icon('heroicon-m-trash'),
+                    ->color('danger'),
             ])
             ->bulkActions([
                 BulkAction::make('enable')
+                    ->action(fn(Collection $records) => $records->each->update(['enabled' => true]))
                     ->label('Enable Selected')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->action(fn(Collection $records) => $records->each->update(['enabled' => true]))
                     ->deselectRecordsAfterCompletion(),
 
                 BulkAction::make('disable')
+                    ->action(fn(Collection $records) => $records->each->update(['enabled' => false]))
                     ->label('Disable Selected')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->action(fn(Collection $records) => $records->each->update(['enabled' => false]))
                     ->deselectRecordsAfterCompletion(),
 
-                DeleteBulkAction::make(),
+                DeleteBulkAction::make()
             ])
-            
-            // Suppression des headerActions du tableau pour les déplacer dans la vue
-            ->headerActions([]);
-           
+            ->headerActions([
+                CreateAction::make()
+                    ->model(Rule::class)
+                    ->modalHeading('Create a New Rule')
+                    ->button()
+                    ->label('Add New Rule')
+                    ->icon('heroicon-c-plus')
+                    ->slideOver()
+                    ->form([
+                        TextInput::make('name')
+                            ->autocomplete(false)
+                            ->required()
+                            ->maxLength(190)
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Write name of a rule ')
+                            ->placeholder('Write the rule you want to add'),
+
+                        Select::make('sending_event')
+                            ->label('Event')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Write a sending event')
+                            ->options([
+                                'booking_created' => 'Booking Created',
+                                'booking_updated' => 'Booking Updated',
+                                'booking_deleted' => 'Booking Deleted',
+                            ])
+                            ->required(),
+
+                        DateTimePicker::make('sending_time')
+                            ->label('Sending Time')
+                            ->required()
+                            ->seconds(false)
+                            ->displayFormat('F j, Y, g:i a')
+                            ->format('Y-m-d H:i:s')
+                            ->native(false)
+                            ->default(null),
+
+                        Section::make('properties')
+                            ->description('Select the properties you want to apply this rule to.')
+                            ->icon('heroicon-o-home')
+                            ->schema([
+                                CheckboxList::make('properties')
+                                    ->columns(2)
+                                    ->label('')
+                                    ->options(function () {
+                                        return Auth::user()
+                                            ->ownedProperties()
+                                            ->get()
+                                            ->pluck('attribute.name', 'id')
+                                            ->all();
+                                    })
+                                    ->searchable(fn(CheckboxList $component): bool => count($component->getOptions()) > 10)
+                                    ->bulkToggleable()
+                                    ->noSearchResultsMessage('No properties found.')
+                                    ->searchingMessage('Searching for a property...')
+                                    ->searchPrompt('Search for a property')
+                            ])
+                            ->collapsible(),
+
+                        Section::make('Platforms')
+                            ->description('Select the platforms you want to apply this rule to.')
+                            ->icon('heroicon-o-presentation-chart-bar')
+                            ->schema([
+                                CheckboxList::make('platforms')
+                                    ->label('')
+                                    ->options(function () {
+                                        return Platform::whereIn('type', ['ota', 'pms', 'sub_pms'])
+                                            ->pluck('name', 'id');
+                                    })
+                                    ->bulkToggleable()
+                                    ->columns(2)
+                            ])
+                            ->collapsible(),
+
+                        Section::make('Channels')
+                            ->description('Select the channels you want to apply this rule to.')
+                            ->icon('heroicon-o-chat-bubble-left-right')
+                            ->schema([
+                                CheckboxList::make('channels')
+                                    ->label('')
+                                    ->options(function () {
+                                        return Channel::all()
+                                            ->pluck('name', 'id')
+                                            ->all();
+                                    })
+                                    ->bulkToggleable()
+                                    ->columns(2)
+                                    ->reactive()
+                                    ->afterStateUpdated(function ($state, $set) {
+                                        $isSmsSelected = in_array('sms', array_map(fn($item) => strtoupper($item), $state));
+                                        $this->isSmsSelected = $isSmsSelected;
+                                    }),
+                            ])
+                            ->collapsible(),
+                        Section::make('Message')
+                            ->description('Create the rule messages you want to use.')
+                            ->icon('heroicon-o-envelope')
+                            ->schema([
+                                Select::make('locale')
+                                    ->options([
+                                        // locales
+                                        'en-US' => 'en_US'
+                                    ])
+                                    ->required(),
+                                Select::make('template')
+                                    ->label('Template')
+
+                                    ->reactive()
+                                    ->afterStateUpdated(function ($state, $set) {
+                                        $template = MessageTemplate::find($state);
+                                        if ($template) {
+                                            $set('long_title', $template->long_title);
+                                            $set('long_content', $template->long_content);
+                                            $set('short_title', $template->short_title);
+                                            $set('short_content', $template->short_content);
+                                        }
+                                    }),
+
+                                Section::make('Long format')
+                                    ->description('For Emails and API messages')
+                                    ->schema([
+                                        TextInput::make('long_title')
+                                            ->autocomplete(false)
+                                            ->maxLength(190)
+                                            ->required(),
+                                        Textarea::make('long_content')
+                                            ->required()
+                                            ->autosize(),
+                                    ])
+                                    ->collapsible(),
+                                Section::make('Short format')
+                                    ->description('For SMS messages')
+                                    ->schema([
+                                        TextInput::make('short_title')
+                                            ->autocomplete(false)
+                                            ->maxLength(190),
+                                        Textarea::make('short_content')
+                                            ->autosize()
+                                            ->maxLength(160),
+                                    ])
+                                    ->disabled($this->isSmsSelected)
+                                    ->collapsible()
+                                    ->collapsed(),
+                            ])
+                            ->collapsible(),
+
+                        ToggleButtons::make('enabled')
+                            ->label('Enable this rule?')
+                            ->boolean()
+                            ->grouped()
+                            ->default(true)
+                    ])
+                    ->using(function (array $data): Rule {
+                        $rule = Rule::create([
+                            'name' => $data['name'],
+                            'enabled' => boolval($data['enabled']),
+                            'sending_minutes' => 0,
+                            'sending_offset_direction' => 'after',
+                            'sending_event' => $data['sending_event'],
+                            'sending_time' => $data['sending_time'],
+                            'created_by' => Auth::user()->id,
+                        ]);
+
+                        $rule_message = new RuleMessage([
+                            'locale' => $data['locale'],
+                            'short_title' => $data['short_title'] ?? '',
+                            'long_title' => $data['long_title'],
+                            'short_content' => $data['short_content'] ?? '',
+                            'long_content' => $data['long_content']
+                        ]);
+
+                        $rule->properties()->attach($data['properties']);
+                        $rule->platforms()->attach($data['platforms']);
+                        $rule->channels()->attach($data['channels']);
+
+                        $rule_message->rule()->associate($rule);
+                        $rule_message->save();
+
+
+
+                        return $rule;
+                    })
+                    ->successNotification(null)
+                    ->after(function () {
+                        Notification::make()
+                            ->body('New rule created successfully.')
+                            ->success()
+                            ->send();
+                    })
+            ]);
     }
-    
+
     public function render()
     {
         return view('livewire.automation.message-rules-table');
