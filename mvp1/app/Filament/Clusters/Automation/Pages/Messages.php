@@ -47,17 +47,18 @@ class Messages extends Page
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make('create-rule')
+            CreateAction::make('create-automated-message')
                 ->label('+ Automated Message')
                 ->button()
-                ->color('success')
+                ->color('primary')
                 ->size('lg')
                 ->slideOver()
                 ->modalWidth('2xl')
                 ->modalHeading('Create New Automated Message')
                 ->extraAttributes([
-                    'class' => 'bg-teal-700 hover:bg-teal-800 text-white font-medium px-6 py-2 rounded-lg shadow-sm transition-colors duration-200'
+                    'class' => 'bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-3 rounded-lg shadow-sm transition-colors duration-200 inline-flex items-center'
                 ])
+                ->icon('heroicon-m-plus')
                 ->form([
                     TextInput::make('name')
                         ->autocomplete(false)
@@ -198,6 +199,13 @@ class Messages extends Page
                         ->success()
                         ->send();
                 })
+        ];
+    }
+
+    public function getExtraBodyAttributes(): array
+    {
+        return [
+            'class' => 'automation-messages-page',
         ];
     }
 }

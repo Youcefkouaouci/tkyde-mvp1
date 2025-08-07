@@ -44,8 +44,14 @@ class MessageRulesTable extends Component implements HasForms, HasTable
     public $properties;
     public $selectedTemplate = null;
     public $isSmsSelected = false;
+    public $search = '';
 
     protected $listeners = ['show-properties-modal' => 'showPropertiesModal'];
+
+    public function updatedSearch()
+    {
+        // La recherche sera gérée par Livewire automatiquement
+    }
 
     public function showPropertiesModal($properties)
     {
@@ -59,9 +65,11 @@ class MessageRulesTable extends Component implements HasForms, HasTable
             ->query(
                 Rule::query()
                     ->with(['properties.photos', 'properties.attribute', 'platforms', 'channels', 'ruleMessage'])
+                    ->when($this->search, function ($query) {
+                        $query->where('name', 'like', '%' . $this->search . '%');
+                    })
             )
-            ->searchable()
-            ->searchPlaceholder('Search messages...')
+            ->searchable(false) // Désactiver la recherche par défaut de Filament
             ->columns([
                 TextColumn::make('status')
                     ->label('Status')
@@ -138,6 +146,7 @@ class MessageRulesTable extends Component implements HasForms, HasTable
             ->defaultPaginationPageOption(10)
             ->paginationPageOptions([10, 25, 50])
             ->striped()
+            ->poll('30s') // Actualisation automatique toutes les 30 secondes
             ->filters([
                 SelectFilter::make('enabled')
                     ->label('Status')
