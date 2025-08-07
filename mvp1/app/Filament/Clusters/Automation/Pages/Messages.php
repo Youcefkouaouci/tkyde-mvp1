@@ -48,28 +48,33 @@ class Messages extends Page
     {
         return [
             CreateAction::make('create-rule')
-                ->label('Automated Message')
+                ->label('+ Automated Message')
                 ->button()
-                ->color('primary')
-                ->icon('heroicon-c-plus')
+                ->color('success')
+                ->size('lg')
                 ->slideOver()
                 ->modalWidth('2xl')
                 ->modalHeading('Create New Automated Message')
+                ->extraAttributes([
+                    'class' => 'bg-teal-700 hover:bg-teal-800 text-white font-medium px-6 py-2 rounded-lg shadow-sm transition-colors duration-200'
+                ])
                 ->form([
                     TextInput::make('name')
                         ->autocomplete(false)
                         ->required()
                         ->maxLength(190)
-                        ->placeholder('Write the rule you want to add'),
+                        ->placeholder('Enter message name')
+                        ->label('Message Name'),
 
                     Select::make('sending_event')
-                        ->label('Event')
+                        ->label('Trigger Event')
                         ->options([
                             'booking_created' => 'Booking Created',
                             'booking_updated' => 'Booking Updated',
                             'booking_deleted' => 'Booking Deleted',
                         ])
-                        ->required(),
+                        ->required()
+                        ->placeholder('Select trigger event'),
 
                     DateTimePicker::make('sending_time')
                         ->label('Sending Time')
@@ -80,6 +85,8 @@ class Messages extends Page
                         ->native(false),
 
                     Section::make('Properties')
+                        ->description('Select which properties this message applies to')
+                        ->icon('heroicon-o-home')
                         ->schema([
                             CheckboxList::make('properties')
                                 ->columns(2)
@@ -92,10 +99,13 @@ class Messages extends Page
                                         ->all();
                                 })
                                 ->bulkToggleable()
+                                ->searchable()
                         ])
                         ->collapsible(),
 
                     Section::make('Platforms')
+                        ->description('Select which platforms this message applies to')
+                        ->icon('heroicon-o-globe-alt')
                         ->schema([
                             CheckboxList::make('platforms')
                                 ->label('')
@@ -109,6 +119,8 @@ class Messages extends Page
                         ->collapsible(),
 
                     Section::make('Channels')
+                        ->description('Select which channels this message will be sent through')
+                        ->icon('heroicon-o-chat-bubble-left-right')
                         ->schema([
                             CheckboxList::make('channels')
                                 ->label('')
@@ -123,20 +135,25 @@ class Messages extends Page
                         ->collapsible(),
 
                     Section::make('Message')
+                        ->description('Configure your message content')
+                        ->icon('heroicon-o-envelope')
                         ->schema([
                             Select::make('locale')
+                                ->label('Language')
                                 ->options(['en-US' => 'en_US'])
                                 ->required(),
 
                             TextInput::make('long_title')
                                 ->label('Title')
                                 ->required()
-                                ->maxLength(190),
+                                ->maxLength(190)
+                                ->placeholder('Enter message title'),
 
                             Textarea::make('long_content')
                                 ->label('Content')
                                 ->required()
-                                ->autosize(),
+                                ->autosize()
+                                ->placeholder('Enter your message content...'),
                         ])
                         ->collapsible(),
 

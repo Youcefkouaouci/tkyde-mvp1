@@ -58,77 +58,86 @@ class MessageRulesTable extends Component implements HasForms, HasTable
         return $table
             ->query(
                 Rule::query()
-                    ->with(['properties.photos', 'properties.attribute', 'platforms'])
+                    ->with(['properties.photos', 'properties.attribute', 'platforms', 'channels', 'ruleMessage'])
             )
+            ->searchable()
+            ->searchPlaceholder('Search messages...')
             ->columns([
+                TextColumn::make('status')
+                    ->label('Status')
+                    ->getStateUsing(fn(Rule $record) => $record->enabled)
+                    ->formatStateUsing(function ($state) {
+                        return $state 
+                            ? '<div class="flex items-center"><div class="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg></div></div>'
+                            : '<div class="flex items-center"><div class="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"><svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg></div></div>';
+                    })
+                    ->html()
+                    ->sortable('enabled'),
                 TextColumn::make('name')
-                    ->label('Rule Name')
+                    ->label('Message Name')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->weight('medium'),
 
                 TextColumn::make('sending_event')
-                    ->label('Event')
+                    ->label('Trigger')
                     ->sortable()
-                    ->searchable(),
-
-                // TextColumn::make('sending_minutes')
-                //     ->label('Minutes Before/After')
-                //     ->sortable()
-                //     ->searchable(),
-
-                // TextColumn::make('sending_time')
-                //     ->label('Sending Time')
-                //     ->sortable()
-                //     ->searchable()
-                //     ->dateTime('F j, Y, g:i a')
-                //     ->placeholder('N/A'),
-
-                IconColumn::make('enabled')
-                    ->boolean(),
-
-                ImageColumn::make('platforms.icon')
-                    ->label('Platforms')
                     ->searchable()
-                    ->circular()
-                    ->stacked()
-                    ->ring(3)
-                    ->limit(2),
+                    ->formatStateUsing(function ($state) {
+                        $eventMap = [
+                            'booking_created' => '1 minute after booking',
+                            'booking_updated' => '5 minutes after booking',
+                            'booking_deleted' => '5 days before check-in',
+                        ];
+                        return $eventMap[$state] ?? $state;
+                    }),
+
+                TextColumn::make('hosts')
+                    ->label('Hosts')
+                    ->getStateUsing(function (Rule $record) {
+                        // Simuler des hôtes pour la démo
+                        return collect(['John Doe', 'Jane Smith', 'Mike Johnson'])
+                            ->take(rand(1, 3))
+                            ->map(function ($name, $index) {
+                                $colors = ['bg-red-500', 'bg-blue-500', 'bg-pink-500', 'bg-green-500', 'bg-purple-500'];
+                                $initials = collect(explode(' ', $name))->map(fn($n) => substr($n, 0, 1))->join('');
+                                return '<div class="inline-flex items-center justify-center w-8 h-8 text-xs font-medium text-white rounded-full ' . $colors[$index % count($colors)] . '">' . $initials . '</div>';
+                            })
+                            ->join(' ');
+                    })
+                    ->html(),
+
+                TextColumn::make('platforms')
+                    ->label('Platforms')
+                    ->getStateUsing(function (Rule $record) {
+                        return $record->platforms->map(function ($platform) {
+                            $platformIcons = [
+                                'airbnb' => '<div class="inline-flex items-center justify-center w-8 h-8 bg-red-500 text-white rounded-full text-xs font-bold">A</div>',
+                                'booking' => '<div class="inline-flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-xs font-bold">B</div>',
+                                'vrbo' => '<div class="inline-flex items-center justify-center w-8 h-8 bg-blue-400 text-white rounded-full text-xs font-bold">V</div>',
+                                'default' => '<div class="inline-flex items-center justify-center w-8 h-8 bg-gray-500 text-white rounded-full text-xs font-bold">' . substr($platform->name, 0, 1) . '</div>',
+                            ];
+                            
+                            $key = strtolower($platform->name);
+                            return $platformIcons[$key] ?? $platformIcons['default'];
+                        })->join(' ');
+                    })
+                    ->html(),
                 TextColumn::make('properties')
                     ->label('Properties')
-                    ->getStateUsing(
-                        fn(Rule $record) =>
-                        $record->properties->pluck('attribute.name')->join(', ')
-                    ),
-
-                // ImageColumn::make('property_images')
-                //     ->label('Properties')
-                //     ->getStateUsing(function ($record) {
-                //         return $record->properties->map(function ($property) {
-                //             return $property->photos->first()?->url ?? 'properties/property-default-image.jpg';
-                //         })->filter()->toArray();
-                //     })
-                //     ->circular()
-                //     ->limit(2)
-                //     ->limitedRemainingText()
-                //     ->action(
-                //         Action::make('viewProperties')
-                //             ->label('show more')
-                //             ->modalHeading('Properties')
-                //             ->modalContent(function (Rule $record) {
-                //                 $properties = $record->properties->load('attribute')->map(function ($property) {
-                //                     return [
-                //                         'name' => $property->attribute->name ?? 'N/A',
-                //                         'photo' => $property->photos->first()?->url ?? 'properties/property-default-image.jpg'
-                //                     ];
-                //                 });
-
-                //                 return view('livewire.automation.properties-modal', ['properties' => $properties]);
-                //             })
-                //             ->modalWidth('lg')
-                //             ->modalSubmitAction(false)
-                //             ->modalCancelAction(false)
-                //     )
+                    ->getStateUsing(function (Rule $record) {
+                        return $record->properties->take(3)->map(function ($property, $index) {
+                            $photo = $property->photos->first()?->url ?? 'https://images.pexels.com/photos/1396122/pexels-photo-1396122.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop';
+                            return '<img src="' . $photo . '" alt="Property" class="inline-block w-10 h-10 rounded-lg object-cover border-2 border-white shadow-sm" style="margin-left: ' . ($index > 0 ? '-8px' : '0') . '">';
+                        })->join('') . ($record->properties->count() > 3 ? '<span class="inline-flex items-center justify-center w-10 h-10 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium border-2 border-white shadow-sm ml-2">+' . ($record->properties->count() - 3) . '</span>' : '');
+                    })
+                    ->html(),
             ])
+            ->defaultSort('created_at', 'desc')
+            ->paginated([10, 25, 50])
+            ->defaultPaginationPageOption(10)
+            ->paginationPageOptions([10, 25, 50])
+            ->striped()
             ->filters([
                 SelectFilter::make('enabled')
                     ->label('Status')
@@ -145,7 +154,10 @@ class MessageRulesTable extends Component implements HasForms, HasTable
             ])
             ->actions([
                 EditAction::make()
-                    ->button()
+                    ->iconButton()
+                    ->icon('heroicon-o-pencil')
+                    ->color('info')
+                    ->tooltip('Edit message')
                     ->slideOver()
                     ->form([
                         TextInput::make('name')
@@ -322,9 +334,12 @@ class MessageRulesTable extends Component implements HasForms, HasTable
 
                         return $record;
                     }),
+                    
                 DeleteAction::make()
-                    ->button()
-                    ->color('danger'),
+                    ->iconButton()
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->tooltip('Delete message'),
             ])
             ->bulkActions([
                 BulkAction::make('enable')
@@ -447,7 +462,7 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                                     ->required(),
                                 Select::make('template')
                                     ->label('Template')
-
+                                    ->options(MessageTemplate::pluck('name', 'id')->toArray())
                                     ->reactive()
                                     ->afterStateUpdated(function ($state, $set) {
                                         $template = MessageTemplate::find($state);
@@ -530,7 +545,10 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                             ->success()
                             ->send();
                     })
-            ]);
+            ])
+            ->emptyStateHeading('No automated messages yet')
+            ->emptyStateDescription('Create your first automated message to get started.')
+            ->emptyStateIcon('heroicon-o-envelope');
     }
 
     public function render()
