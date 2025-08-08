@@ -60,7 +60,7 @@ class MessageRulesTable extends Component implements HasForms, HasTable
         return $table
             ->query(
                 Rule::query()
-                    ->with(['properties.photos', 'properties.attribute', 'properties.user', 'platforms', 'channels', 'ruleMessage'])
+                    ->with(['properties.photos', 'properties.attribute', 'properties.userRoles.role', 'platforms', 'channels', 'ruleMessage'])
             )
             ->searchable()
             ->searchPlaceholder('Search messages...')
@@ -97,13 +97,23 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                 TextColumn::make('hosts')
                     ->label('Hosts')
                     ->getStateUsing(function (Rule $record) {
-                        // Pour l'instant, utiliser le créateur de la règle
-                        $creator = User::find($record->created_by);
+                        // Récupérer tous les propriétaires (owners) des propriétés liées à cette règle
+                        $propertyOwners = collect();
                         
-                        if (!$creator) {
-                            return new HtmlString('<span class="text-gray-500 text-sm">System</span>');
+                        foreach ($record->properties as $property) {
+                            // Récupérer les utilisateurs qui ont le rôle "Owner" pour cette propriété
+                            $owners = User::whereHas('userRoles', function ($query) use ($property) {
+                                $query->where('property_id', $property->id)
+                                    ->whereHas('role', function ($roleQuery) {
+                                        $roleQuery->where('name', 'Owner');
+                                    });
+                            })->get();
+                            
+                            $propertyOwners = $propertyOwners->merge($owners);
                         }
                         
+                        // Supprimer les doublons
+                        $propertyOwners = $propertyOwners->unique('id');
                         $propertyOwners = collect([$creator]);
                         
                         if ($propertyOwners->isEmpty()) {
