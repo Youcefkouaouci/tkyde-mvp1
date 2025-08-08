@@ -97,21 +97,14 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                 TextColumn::make('hosts')
                     ->label('Hosts')
                     ->getStateUsing(function (Rule $record) {
-                        // Récupérer les utilisateurs propriétaires des propriétés liées à cette règle
-                        $propertyOwners = $record->properties()
-                            ->with('user')
-                            ->get()
-                            ->pluck('user')
-                            ->unique('id')
-                            ->filter();
+                        // Pour l'instant, utiliser le créateur de la règle
+                        $creator = User::find($record->created_by);
                         
-                        // Si pas de propriétaires trouvés, utiliser le créateur de la règle
-                        if ($propertyOwners->isEmpty()) {
-                            $creator = User::find($record->created_by);
-                            if ($creator) {
-                                $propertyOwners = collect([$creator]);
-                            }
+                        if (!$creator) {
+                            return new HtmlString('<span class="text-gray-500 text-sm">System</span>');
                         }
+                        
+                        $propertyOwners = collect([$creator]);
                         
                         if ($propertyOwners->isEmpty()) {
                             return new HtmlString('<span class="text-gray-500 text-sm">System</span>');
