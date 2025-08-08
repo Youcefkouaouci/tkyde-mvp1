@@ -5,6 +5,7 @@ namespace App\Livewire\Automation;
 use Closure;
 use App\Models\Rule;
 use App\Models\Channel;
+use App\Models\User;
 use Livewire\Component;
 use App\Models\Platform;
 use Filament\Tables\Table;
@@ -35,6 +36,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Tables\Concerns\InteractsWithTable;
+use Illuminate\Support\HtmlString;
 
 class MessageRulesTable extends Component implements HasForms, HasTable
 {
@@ -58,7 +60,7 @@ class MessageRulesTable extends Component implements HasForms, HasTable
         return $table
             ->query(
                 Rule::query()
-                    ->with(['properties.photos', 'properties.attribute', 'platforms', 'channels', 'ruleMessage'])
+                    ->with(['properties.photos', 'properties.attribute', 'properties.user', 'platforms', 'channels', 'ruleMessage'])
             )
             ->searchable()
             ->searchPlaceholder('Search messages...')
@@ -95,15 +97,56 @@ class MessageRulesTable extends Component implements HasForms, HasTable
                 TextColumn::make('hosts')
                     ->label('Hosts')
                     ->getStateUsing(function (Rule $record) {
-                        // Simuler des hôtes pour la démo
-                        return collect(['John Doe', 'Jane Smith', 'Mike Johnson'])
-                            ->take(rand(1, 3))
-                            ->map(function ($name, $index) {
-                                $colors = ['bg-red-500', 'bg-blue-500', 'bg-pink-500', 'bg-green-500', 'bg-purple-500'];
-                                $initials = collect(explode(' ', $name))->map(fn($n) => substr($n, 0, 1))->join('');
-                                return '<div class="inline-flex items-center justify-center w-8 h-8 text-xs font-medium text-white rounded-full ' . $colors[$index % count($colors)] . '">' . $initials . '</div>';
-                            })
-                            ->join(' ');
+                        // Récupérer les utilisateurs propriétaires des propriétés liées à cette règle
+                        $propertyOwners = $record->properties()
+                            ->with('user')
+                            ->get()
+                            ->pluck('user')
+                            ->unique('id')
+                            ->filter();
+                        
+                        // Si pas de propriétaires trouvés, utiliser le créateur de la règle
+                        if ($propertyOwners->isEmpty()) {
+                            $creator = User::find($record->created_by);
+                            if ($creator) {
+                                $propertyOwners = collect([$creator]);
+                            }
+                        }
+                        
+                        if ($propertyOwners->isEmpty()) {
+                            return new HtmlString('<span class="text-gray-500 text-sm">System</span>');
+                        }
+                        
+                        // Limiter à 3 hôtes visibles
+                        $visibleHosts = $propertyOwners->take(3);
+                        $remainingCount = $propertyOwners->count() - 3;
+                        
+                        $hostAvatars = $visibleHosts->map(function ($user, $index) {
+                            $initial = strtoupper(substr($user->name, 0, 1));
+                            
+                            // Couleurs cohérentes basées sur le nom
+                            $colors = ['bg-blue-500', 'bg-pink-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500', 'bg-indigo-500'];
+                            $colorIndex = abs(crc32($user->name)) % count($colors);
+                            $color = $colors[$colorIndex];
+                            
+                            $marginLeft = $index > 0 ? 'style="margin-left: -8px;"' : '';
+                            
+                            return "<div class='{$color} w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm border-2 border-white' 
+                                         title='{$user->name}' {$marginLeft}>
+                                        {$initial}
+                                    </div>";
+                        })->join('');
+                        
+                        // Ajouter le compteur s'il y a plus de 3 hôtes
+                        if ($remainingCount > 0) {
+                            $hostAvatars .= "<div class='bg-gray-100 text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 border-white shadow-sm' 
+                                                 style='margin-left: -8px;' 
+                                                 title='" . $propertyOwners->skip(3)->pluck('name')->join(', ') . "'>
+                                                +{$remainingCount}
+                                            </div>";
+                        }
+                        
+                        return new HtmlString("<div class='flex items-center'>{$hostAvatars}</div>");
                     })
                     ->html(),
 
